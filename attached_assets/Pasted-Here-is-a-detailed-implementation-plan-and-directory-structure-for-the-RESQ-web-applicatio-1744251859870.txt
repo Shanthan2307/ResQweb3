@@ -1,0 +1,202 @@
+Here is a **detailed implementation plan** and **directory structure** for the **RESQ web application**, broken down into frontend (React), backend (Django), and Web3 integration.
+
+---
+
+## 🧠 High-Level Architecture
+
+**Frontend:** React (with React Router, Axios, Context API or Redux)  
+**Backend:** Django + Django REST Framework (DRF)  
+**Database:** PostgreSQL  
+**Web3:** Solana integration via [Solana Web3.js](https://solana-labs.github.io/solana-web3.js/) or Python-based blockchain connector (e.g., Anchor or custom interface)  
+**Wallet System:** Stripe + USDC Bridge (with currency conversion logic)
+
+---
+
+## 📁 Project Directory Structure
+
+### 📦 Backend (Django)
+```
+resq_backend/
+│
+├── resq/                       # Main Django project folder
+│   ├── settings.py             # Project settings
+│   └── urls.py
+│
+├── users/                      # App for authentication and user models
+│   ├── models.py               # LocalUser, FireStation, NGO
+│   ├── serializers.py
+│   ├── views.py
+│   └── urls.py
+│
+├── dashboard/
+│   ├── models.py               # Fire station assignments, resources, etc.
+│   ├── views.py
+│   └── urls.py
+│
+├── notifications/
+│   ├── models.py               # Resource alerts, volunteer calls
+│   └── services.py             # Push/email notification logic
+│
+├── wallet/
+│   ├── models.py               # USDC and fiat wallets
+│   └── services.py             # USD → USDC conversion logic
+│
+└── blockchain/
+    ├── services.py             # Web3 interactions (Solana)
+    └── logs.py                 # Transaction logging and writing to chain
+```
+
+---
+
+### ⚛️ Frontend (React)
+```
+resq_frontend/
+│
+├── public/
+├── src/
+│   ├── assets/
+│   ├── components/
+│   │   ├── auth/
+│   │   ├── dashboard/
+│   │   └── wallet/
+│   ├── pages/
+│   │   ├── LocalDashboard.jsx
+│   │   ├── FireStationDashboard.jsx
+│   │   └── NGODashboard.jsx
+│   ├── context/                # Auth & User Context
+│   ├── services/              # Axios API wrappers
+│   └── App.jsx
+│   └── main.jsx
+│
+└── tailwind.config.js         # Or use any preferred styling system
+```
+
+---
+
+## ✅ Features Implementation Breakdown
+
+### 1. **User Authentication**
+- Roles: `LocalUser`, `FireStation`, `NGO`
+- Django uses custom user models with `user_type` field
+- React login form routes to `/login`, backend issues JWT
+
+### 2. **Fire Station Assignment**
+- Residents register with their **PIN code**
+- On registration, backend logic:
+```python
+firestation = FireStation.objects.filter(
+    pin_code_range_start__lte=user.pin_code,
+    pin_code_range_end__gte=user.pin_code
+).first()
+user.assigned_station = firestation
+```
+
+---
+
+### 3. **Dashboards by Role**
+
+#### A. Local User
+- View assigned fire station
+- Donate:
+  - ➕ **Resource** (via dropdown or file upload)
+  - 💵 **Money** (USD or USDC wallet)
+- Volunteer:
+  - Sign up and manage availability
+- Notifications:
+  - Show new resource/volunteer requests from assigned station
+
+#### B. Fire Station
+- **Create Resource Requests**
+- **Wallet** (View USDC balance)
+- **Volunteer Pool Access**
+- **Emergency Feed**:
+  - Display other stations' emergencies from API
+- **Fulfilled Request Log**:
+  - Update on donation status
+
+#### C. NGO
+- Resource donation management
+- Specialized volunteer pool
+- Receive and respond to requests from fire stations
+- USDC Wallet with USD conversion logic
+
+---
+
+## 🔗 Web3 (Solana) Integration
+
+**Solana Logging Features**:
+- On:
+  - Resource donation
+  - Money transfer
+  - Volunteer dispatch
+- Log includes:
+  - Sender ID
+  - Receiver ID
+  - Resource/money/volunteer details
+  - Timestamp
+  - Usage declaration
+- Publish to:
+  - **Solana blockchain** via JSON blobs in Arweave or IPFS if needed
+
+```js
+// Example: Logging transaction in Solana
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  SystemProgram,
+  sendAndConfirmTransaction
+} from '@solana/web3.js';
+```
+
+---
+
+## 💰 Currency Conversion Logic
+
+- Accept donations in USD (via Stripe or PayPal)
+- Convert to USDC using a bridge API (e.g., Circle, Coinbase Commerce)
+- Abstract conversion and deposit to wallets of:
+  - NGOs
+  - Fire stations
+  - (Visible in dashboard logs)
+
+```python
+# Example pseudo-code
+def convert_usd_to_usdc(amount, user_wallet):
+    usdc_amount = external_api.convert(amount, "USD", "USDC")
+    user_wallet.deposit(usdc_amount)
+```
+
+---
+
+## 🔔 Notifications
+
+- Use Django Signals or Celery for async tasks
+- Email + in-app notifications when:
+  - Fire station posts a request
+  - New emergency arises
+  - Donations received
+
+---
+
+## 🔐 Tech Stack Summary
+
+| Feature                     | Tool/Framework |
+|----------------------------|----------------|
+| Frontend UI                | React + Tailwind |
+| Backend API                | Django REST Framework |
+| Auth & JWT                 | SimpleJWT |
+| Database                   | PostgreSQL |
+| Blockchain Logging         | Solana Web3.js / Anchor |
+| Payments                   | Stripe + Circle/USDC |
+| Notifications              | Django Channels or Celery |
+| Deployment                 | Vercel (frontend), Railway/Heroku (backend), IPFS for logs |
+
+---
+
+Would you like:
+- Sample Django model + API for user registration?
+- Solana integration starter template?
+- Frontend component tree?
+
+Let me know how deep you want to go with each module!

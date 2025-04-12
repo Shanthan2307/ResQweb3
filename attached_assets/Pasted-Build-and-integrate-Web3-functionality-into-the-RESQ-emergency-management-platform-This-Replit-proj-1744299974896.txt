@@ -1,0 +1,80 @@
+Build and integrate Web3 functionality into the RESQ emergency management platform. This Replit project focuses on developing two core Solana smart contracts to ensure transparency and traceability in resource sharing and fund donations using USDC.
+
+We aim to make sure all emergency transactions and contributions are:
+
+Immutable
+
+Publicly verifiable
+
+Secure
+
+Blockchain-logged
+
+🧱 Feature 1: Solana Smart Contract for Order Fulfillment
+Write a Solana smart contract (program) that logs the following details every time a resource order is fulfilled:
+
+🔹 Resource details (type, quantity)
+
+🔹 Assigned fire station
+
+🔹 Fulfilling local user or NGO
+
+🔹 Timestamp
+
+🔹 Purpose of use (metadata)
+
+🔹 Volunteer data (if applicable)
+
+Additionally:
+
+If a volunteer entry is recorded (signifying a service-based donation), this too should be written to the blockchain.
+
+Store all this info in a structured block that can be queried by external observers, including AI-based tools like GPT-3 for audit and usage transparency.
+
+Use Solana's Anchor framework to simplify program writing and account management.
+
+💰 Feature 2: USDC Donation Contract (MetaMask / Phantom-based)
+Develop a second smart contract for handling monetary donations in USDC from:
+
+NGOs
+
+Local residents
+
+🔒 The smart contract should:
+
+Accept USDC from connected wallets (using Phantom or MetaMask with a USDC bridge)
+
+Transfer to the fire station’s wallet
+
+Record:
+
+Sender ID
+
+Receiver (fire station)
+
+Amount
+
+Conversion (if sent via USD)
+
+Timestamp
+
+Usage purpose (free-text field)
+
+Add logic to convert USD to USDC if the sender does not hold USDC, and record both the fiat and crypto values for transparency.
+
+🌐 Technologies to Use
+Solana + Anchor for smart contract development
+
+Phantom Wallet or MetaMask with bridging for Web3 payments
+
+React for the frontend (if expanded)
+
+Arweave/IPFS for storing extra metadata if needed
+
+🎯 Goal
+Achieve a transparent, tamper-proof, and verifiable system where:
+
+All fulfilled orders and donations are publicly visible on Solana.
+
+Stakeholders (including auditors and the public) can verify that donated resources and funds are being used appropriately.
+
