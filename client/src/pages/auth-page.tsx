@@ -115,7 +115,7 @@ export default function AuthPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (user && !loginMutation.isPending && !registerMutation.isPending) {
-      navigate("/");
+      navigate("/dashboard");
     }
   }, [user, loginMutation.isPending, registerMutation.isPending, navigate]);
   
@@ -212,7 +212,7 @@ export default function AuthPage() {
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-primary-600 hover:bg-primary-700" 
+                    className="w-full bg-red-900 hover:bg-primary-700" 
                     disabled={loginMutation.isPending}
                   >
                     {loginMutation.isPending ? (
@@ -433,7 +433,7 @@ export default function AuthPage() {
                   
                   <Button 
                     type="submit" 
-                    className="w-full bg-primary-600 hover:bg-primary-700" 
+                    className="w-full bg-red-900 hover:bg-primary-700" 
                     disabled={registerMutation.isPending}
                   >
                     {registerMutation.isPending ? (

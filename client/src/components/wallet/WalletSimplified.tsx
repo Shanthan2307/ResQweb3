@@ -1,29 +1,92 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Wallet as WalletIcon, ExternalLink, Copy, CheckCircle, AlertCircle } from 'lucide-react';
 import { SOLANA_NETWORK } from '@/lib/solana/config';
+import { Connection, PublicKey } from '@solana/web3.js';
 
-export default function WalletSimplified() {
+// USDC mint address on Solana devnet
+const USDC_MINT = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+
+// Use devnet RPC endpoint
+const RPC_ENDPOINT = 'https://api.devnet.solana.com';
+
+interface WalletSimplifiedProps {
+  onWalletUpdate?: (status: 'disconnected' | 'connected' | 'error', balance: { sol: number, usdc: number }) => void;
+}
+
+export default function WalletSimplified({ onWalletUpdate }: WalletSimplifiedProps) {
   const [walletStatus, setWalletStatus] = useState<'disconnected' | 'connected' | 'error'>('disconnected');
   const [address, setAddress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [fakeBalance, setFakeBalance] = useState({ sol: 0, usdc: 0 });
+  const [balance, setBalance] = useState({ sol: 0, usdc: 0 });
+  const [connection] = useState(new Connection(RPC_ENDPOINT, 'confirmed'));
 
-  // Simulate wallet connection
+  // Notify parent component of wallet status and balance changes
+  useEffect(() => {
+    if (onWalletUpdate) {
+      onWalletUpdate(walletStatus, balance);
+    }
+  }, [walletStatus, balance, onWalletUpdate]);
+
+  useEffect(() => {
+    // Check if Phantom is installed
+    if (typeof window !== 'undefined' && (window as any)?.phantom?.solana) {
+      const phantom = (window as any).phantom.solana;
+      
+      // Listen for account changes
+      phantom.on('accountChanged', (publicKey: PublicKey) => {
+        if (publicKey) {
+          setAddress(publicKey.toString());
+          fetchBalances(publicKey);
+        } else {
+          handleDisconnect();
+        }
+      });
+
+      // Check if already connected
+      phantom.connect({ onlyIfTrusted: true })
+        .then(({ publicKey }: { publicKey: PublicKey }) => {
+          setWalletStatus('connected');
+          setAddress(publicKey.toString());
+          fetchBalances(publicKey);
+        })
+        .catch(() => {
+          setWalletStatus('disconnected');
+        });
+    }
+  }, []);
+
+  const fetchBalances = async (publicKey: PublicKey) => {
+    try {
+      // Fetch SOL balance
+      const solBalance = await connection.getBalance(publicKey);
+      setBalance(prev => ({ ...prev, sol: solBalance / 1e9 }));
+
+      // Fetch USDC balance
+      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(publicKey, {
+        mint: USDC_MINT,
+      });
+      
+      if (tokenAccounts.value.length > 0) {
+        const usdcBalance = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+        setBalance(prev => ({ ...prev, usdc: usdcBalance }));
+      } else {
+        setBalance(prev => ({ ...prev, usdc: 0 }));
+      }
+    } catch (error) {
+      console.error('Error fetching balances:', error);
+    }
+  };
+
+  // Handle wallet connection
   const handleConnect = async () => {
     try {
-      // Check if browser has a phantom wallet object
-      if (typeof window !== 'undefined' && (window as any)?.phantom?.solana) {
-        setWalletStatus('connected');
-        setAddress('FakeSo1ana4ddress1111111111111111111111111111');
-        setFakeBalance({
-          sol: 5.2345,
-          usdc: 100.00
-        });
-      } else {
-        setWalletStatus('error');
-      }
+      const phantom = (window as any).phantom.solana;
+      const { publicKey } = await phantom.connect();
+      setWalletStatus('connected');
+      setAddress(publicKey.toString());
+      fetchBalances(publicKey);
     } catch (error) {
       setWalletStatus('error');
       console.error('Error connecting wallet:', error);
@@ -32,9 +95,15 @@ export default function WalletSimplified() {
 
   // Handle disconnection
   const handleDisconnect = async () => {
+    try {
+      const phantom = (window as any).phantom.solana;
+      await phantom.disconnect();
+    } catch (error) {
+      console.error('Error disconnecting wallet:', error);
+    }
     setWalletStatus('disconnected');
     setAddress(null);
-    setFakeBalance({ sol: 0, usdc: 0 });
+    setBalance({ sol: 0, usdc: 0 });
   };
 
   // Copy address to clipboard
@@ -162,19 +231,16 @@ export default function WalletSimplified() {
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-neutral-100 p-3 rounded-md">
             <div className="text-xs text-neutral-500 mb-1">SOL Balance</div>
-            <div className="font-semibold">{fakeBalance.sol.toFixed(4)} SOL</div>
+            <div className="font-semibold">{balance.sol.toFixed(4)} SOL</div>
           </div>
           <div className="bg-neutral-100 p-3 rounded-md">
             <div className="text-xs text-neutral-500 mb-1">USDC Balance</div>
-            <div className="font-semibold">{fakeBalance.usdc.toFixed(2)} USDC</div>
+            <div className="font-semibold">{balance.usdc.toFixed(2)} USDC</div>
           </div>
         </div>
         
         <div className="text-xs text-neutral-500 mt-2">
           Network: <span className="font-medium">{SOLANA_NETWORK.charAt(0).toUpperCase() + SOLANA_NETWORK.slice(1)}</span>
-          <div className="mt-1 p-2 bg-yellow-50 text-yellow-700 rounded">
-            This is a demo wallet component, not connected to a real wallet.
-          </div>
         </div>
       </CardContent>
     </Card>

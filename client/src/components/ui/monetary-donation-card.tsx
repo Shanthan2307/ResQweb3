@@ -11,6 +11,34 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey, Connection } from "@solana/web3.js";
+import { AnchorProvider, Program, Idl } from "@project-serum/anchor";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import * as anchor from "@project-serum/anchor";
+
+// Define a simple IDL for the direct transfer program
+const idl = {
+  version: "0.1.0",
+  name: "direct_transfer",
+  instructions: [
+    {
+      name: "directTransfer",
+      accounts: [
+        { name: "sponsor", isMut: true, isSigner: true },
+        { name: "sponsorTokenAccount", isMut: true, isSigner: false },
+        { name: "merchantTokenAccount", isMut: true, isSigner: false },
+        { name: "tokenProgram", isMut: false, isSigner: false }
+      ],
+      args: [
+        { name: "amount", type: "u64" }
+      ]
+    }
+  ]
+};
+
+const SOLANA_USDC_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const PROGRAM_ID = new PublicKey("AXy9RYUDN2siZSrQ5EXHSyQkKgq2QoG27dKiVamUu6hx");
 
 // We'll need Stripe API keys to implement payment processing
 const monetaryDonationSchema = z.object({
@@ -26,6 +54,8 @@ export default function MonetaryDonationCard({ recipientId }: { recipientId: num
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+  const wallet = useWallet();
+  const connection = new Connection("https://api.mainnet-beta.solana.com");
   
   const form = useForm<MonetaryDonationFormData>({
     resolver: zodResolver(monetaryDonationSchema),
@@ -80,14 +110,112 @@ export default function MonetaryDonationCard({ recipientId }: { recipientId: num
     },
   });
   
+  const handleDirectTransfer = async (amount: number) => {
+    if (!wallet.connected || !wallet.publicKey) {
+      toast({
+        title: "Wallet Error",
+        description: "Please connect your Phantom wallet",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      if (!amount || amount <= 0) {
+        toast({
+          title: "Invalid Amount",
+          description: "Please enter a valid amount",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const sponsorPubKey = wallet.publicKey;
+      const merchantPubKey = new PublicKey("AXy9RYUDN2siZSrQ5EXHSyQkKgq2QoG27dKiVamUu6hx");
+      const amountInSmallestUnit = Math.floor(amount * 1e6);
+      const usdcMint = new PublicKey(SOLANA_USDC_ADDRESS);
+
+      const sponsorTokenAccounts = await connection.getParsedTokenAccountsByOwner(
+        sponsorPubKey,
+        { mint: usdcMint }
+      );
+      if (sponsorTokenAccounts.value.length === 0) {
+        toast({
+          title: "Token Account Error",
+          description: "You do not have a USDC token account",
+          variant: "destructive",
+        });
+        return;
+      }
+      const sponsorTokenAccount = new PublicKey(sponsorTokenAccounts.value[0].pubkey);
+
+      const merchantTokenAccounts = await connection.getParsedTokenAccountsByOwner(
+        merchantPubKey,
+        { mint: usdcMint }
+      );
+      if (merchantTokenAccounts.value.length === 0) {
+        toast({
+          title: "Token Account Error",
+          description: "Beneficiary does not have a USDC token account",
+          variant: "destructive",
+        });
+        return;
+      }
+      const merchantTokenAccount = new PublicKey(merchantTokenAccounts.value[0].pubkey);
+
+      const walletAdapter = {
+        publicKey: wallet.publicKey,
+        signTransaction: async (tx: any) => {
+          if (!wallet.signTransaction) {
+            throw new Error("Wallet does not support transaction signing");
+          }
+          return await wallet.signTransaction(tx);
+        },
+        signAllTransactions: async (txs: any[]) => {
+          if (!wallet.signAllTransactions) {
+            throw new Error("Wallet does not support transaction signing");
+          }
+          return await wallet.signAllTransactions(txs);
+        }
+      };
+
+      const provider = new AnchorProvider(connection, walletAdapter as any, {
+        commitment: "confirmed",
+      });
+
+      const program = new Program(idl as Idl, PROGRAM_ID, provider);
+
+      const tx = await program.methods
+        .directTransfer(new anchor.BN(amountInSmallestUnit))
+        .accounts({
+          sponsor: sponsorPubKey,
+          sponsorTokenAccount,
+          merchantTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+
+      toast({
+        title: "Transfer Successful",
+        description: `Transaction ID: ${tx}`,
+        variant: "default",
+      });
+
+    } catch (error: any) {
+      console.error("❌ Error in direct transfer:", error);
+      toast({
+        title: "Transfer Failed",
+        description: error.message || 'Unknown error',
+        variant: "destructive",
+      });
+    }
+  };
+
   const onSubmit = (data: MonetaryDonationFormData) => {
     if (!user) return;
     
-    donationMutation.mutate({
-      ...data,
-      recipientId: Number(data.recipientId),
-      amount: Number(data.amount),
-    });
+    // Call handleDirectTransfer instead of donationMutation
+    handleDirectTransfer(data.amount);
   };
   
   return (

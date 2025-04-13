@@ -1,4 +1,3 @@
-import { Switch, Route } from "wouter";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -11,6 +10,18 @@ import ResourcesPage from "@/pages/resources";
 import VolunteersPage from "@/pages/volunteers";
 import RequestsPage from "@/pages/requests";
 import PartnershipsPage from "@/pages/partnerships";
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { Route, Switch } from 'wouter';
+import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react';
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
+import { clusterApiUrl } from '@solana/web3.js';
+import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
+import Homepage from "@/pages/homepage";
+
+// Import the wallet adapter styles
+import '@solana/wallet-adapter-react-ui/styles.css';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -27,7 +38,8 @@ function AppRoutes() {
   
   return (
     <Switch>
-      <ProtectedRoute path="/" component={DashboardComponent} />
+      <Route path="/" component={Homepage} />
+      <ProtectedRoute path="/dashboard" component={DashboardComponent} />
       <ProtectedRoute path="/wallet" component={WalletPage} />
       <ProtectedRoute path="/resources" component={ResourcesPage} />
       <ProtectedRoute path="/volunteers" component={VolunteersPage} />
@@ -40,10 +52,21 @@ function AppRoutes() {
 }
 
 function App() {
+  // You can change the network to 'mainnet-beta' for production
+  const network = WalletAdapterNetwork.Devnet;
+  const endpoint = useMemo(() => clusterApiUrl(network), [network]);
+  const wallets = useMemo(() => [new PhantomWalletAdapter()], []);
+
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ConnectionProvider endpoint={endpoint}>
+      <SolanaWalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </WalletModalProvider>
+      </SolanaWalletProvider>
+    </ConnectionProvider>
   );
 }
 

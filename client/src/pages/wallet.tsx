@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +19,9 @@ import { CreditCard, ArrowRightLeft, Wallet, Loader2, Coins } from "lucide-react
 import { Donation } from "@shared/schema";
 import WalletSimplified from "@/components/wallet/WalletSimplified";
 import DonationFormSimplified from "@/components/wallet/DonationFormSimplified";
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 const addFundsSchema = z.object({
   amount: z.number().min(1, "Amount must be at least 1"),
@@ -30,7 +33,11 @@ export default function WalletPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const wallet = useWallet();
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+  const [walletStatus, setWalletStatus] = useState<'disconnected' | 'connected' | 'error'>('disconnected');
+  const [walletBalance, setWalletBalance] = useState({ sol: 0, usdc: 0 });
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   
   // Fetch transactions (donations)
   const { data: transactions, isLoading: isLoadingTransactions } = useQuery<Donation[]>({
@@ -175,6 +182,58 @@ export default function WalletPage() {
     );
   };
   
+  const handleWalletUpdate = (status: 'disconnected' | 'connected' | 'error', balance: { sol: number, usdc: number }) => {
+    setWalletStatus(status);
+    setWalletBalance(balance);
+  };
+
+  // Fetch blockchain transactions
+  useEffect(() => {
+    const fetchRecentTransactions = async () => {
+      if (!wallet.connected || !wallet.publicKey) return;
+      
+      try {
+        const connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com');
+        const USDC_MINT = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+        
+        // Get token accounts
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+          wallet.publicKey,
+          { mint: USDC_MINT }
+        );
+        
+        if (tokenAccounts.value.length > 0) {
+          const tokenAccount = tokenAccounts.value[0].pubkey;
+          
+          // Get recent transactions
+          const signatures = await connection.getSignaturesForAddress(
+            tokenAccount,
+            { limit: 4 }
+          );
+          
+          const transactions = await Promise.all(
+            signatures.map(async (sig) => {
+              const tx = await connection.getParsedTransaction(sig.signature);
+              return {
+                id: sig.signature,
+                date: new Date(sig.blockTime! * 1000),
+                amount: tx?.meta?.postTokenBalances?.[0]?.uiTokenAmount?.uiAmount || 0,
+                status: 'completed',
+                type: 'USDC Transfer'
+              };
+            })
+          );
+          
+          setRecentTransactions(transactions);
+        }
+      } catch (error) {
+        console.error('Error fetching recent transactions:', error);
+      }
+    };
+    
+    fetchRecentTransactions();
+  }, [wallet.connected, wallet.publicKey]);
+
   return (
     <DashboardLayout title="Wallet & Transactions" subtitle="Manage your funds and view transaction history">
       {/* Wallet Card */}
@@ -186,7 +245,11 @@ export default function WalletPage() {
             </div>
             <div>
               <div className="text-sm font-medium text-white/80">Current Balance</div>
-              <div className="text-3xl font-bold">{user?.walletBalance || 0} USDC</div>
+              {walletStatus === 'connected' ? (
+                <div className="text-3xl font-bold">{walletBalance.usdc.toFixed(2)} USDC</div>
+              ) : (
+                <div className="text-lg font-medium text-white/80">Please connect wallet to see balance</div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -288,10 +351,52 @@ export default function WalletPage() {
         
         <TabsContent value="blockchain-wallet">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <WalletSimplified />
+            <WalletSimplified onWalletUpdate={handleWalletUpdate} />
             <DonationFormSimplified />
           </div>
           
+          {/* Recent Transactions Card */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Recent Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!wallet.connected ? (
+                <div className="text-center p-8 bg-neutral-50 rounded-lg">
+                  <p className="text-neutral-500">Connect your wallet to see recent transactions</p>
+                </div>
+              ) : recentTransactions.length === 0 ? (
+                <div className="text-center p-8 bg-neutral-50 rounded-lg">
+                  <p className="text-neutral-500">No recent transactions found</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentTransactions.map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div className="bg-white p-2 rounded-full">
+                          <ArrowRightLeft className="h-5 w-5 text-primary-500" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{transaction.type}</p>
+                          <p className="text-sm text-neutral-500">
+                            {format(transaction.date, "MMM d, yyyy")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-primary-600">
+                          {transaction.amount} USDC
+                        </p>
+                        <StatusBadge status={transaction.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="mt-6">
             <Card>
               <CardHeader>

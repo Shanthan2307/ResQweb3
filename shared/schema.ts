@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   walletBalance: doublePrecision("wallet_balance").default(0),
   registrationId: text("registration_id"), // For NGOs and fire stations (registration/license number)
   specialization: text("specialization"), // For NGOs (what they specialize in)
+  walletAddress: text("wallet_address"), // Solana wallet address for receiving donations
 });
 
 // Resources that can be donated/requested
